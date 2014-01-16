@@ -1,0 +1,230 @@
+import java.awt.Graphics;
+
+import org.osbot.script.*;
+import org.osbot.script.mouse.MinimapTileDestination;
+import org.osbot.script.rs2.map.Position;
+import org.osbot.script.rs2.model.RS2Object;
+import org.osbot.script.rs2.utility.Area;
+
+@ScriptManifest(author = "TheIcy1", info = "This bot will pick flax, create bow string, and bank it. Please start bot in Seers Bank. Enjoy'", name = "Flaxorama", version = 1.00)
+
+/* TO DOs 
+ * 
+ *  - Add check to open door 
+ */
+
+public class PowerMiner extends Script {
+
+	public static final int FLAX_ID = 11778;
+	public static final int SPINNER_ID = 25824;
+	public static final int UP_LADDER_ID = 25938;
+	public static final int DOWN_LADDER_ID = 25939;
+	
+	public boolean ClimbDown = true;
+	public boolean ClimbUp = true;
+	private Position[] pathToSpin = {
+			new Position(2737, 3442, 0),
+			new Position(2732, 3449, 0),
+			new Position(2721, 3459, 0),
+			new Position(2726, 3468, 0),
+			new Position(2715, 3471, 0),
+			new Position(2715, 3471, 0), // in front of ladder
+	};
+	
+	private Position[] pathToBank = {
+		new Position(2715, 3471, 0),
+		new Position(2721, 3484, 0),
+		new Position(2724, 3493, 0),
+	};
+	
+	
+	private Position[] pathToFlax = {
+			new Position(2724, 3493, 0),
+			new Position(2726, 3476, 0),
+			new Position(2727, 3460, 0),
+			new Position(2735, 3444, 0),
+			new Position(2739, 3443, 0)
+	};
+	
+	private static final Area FLAX_AREA = new Area(2738, 3438, 2751, 3451);
+	//private static final Area SPIN_AREA = new Area(2716, 3473, 2710, 3473);
+	private static final Area BANK_AREA = new Area(2721, 3493, 2730, 3493);
+	private static final Area BOTTOM_SPIN_AREA = new Area(2716, 3470, 2711, 3473);
+	private enum State { PICK, WALK_TO_SPIN, CLIMB_LADDER, SPIN, CLIMB_DOWN_LADDER, WALK_TO_BANK, BANK, WALK_TO_FLAX };
+	
+	private State getState() {
+		
+		if(client.getInventory().isFull() && FLAX_AREA.contains(myPlayer())) {
+			log("In flax area...walking to spinner");
+			return State.WALK_TO_SPIN;
+		}
+		else if(client.getInventory().isFull() && BOTTOM_SPIN_AREA.contains(myPlayer()) && ClimbUp && client.getInventory().contains("Flax")) {
+			log("1");
+			return State.CLIMB_LADDER;
+		}
+		else if(client.getInventory().isFull() && BOTTOM_SPIN_AREA.contains(myPlayer()) && client.getInventory().contains("Flax")) {
+			log("2");
+			return State.SPIN;
+		}
+		else if(ClimbDown && BOTTOM_SPIN_AREA.contains(myPlayer()) && client.getInventory().isFull() && client.getInventory().contains("Bow string")) {
+			log("3");
+			return State.CLIMB_DOWN_LADDER;
+		}
+		else if(client.getInventory().isFull() && client.getInventory().contains("Bow string") && BOTTOM_SPIN_AREA.contains(myPlayer())) {
+			log("4");
+			return State.WALK_TO_BANK;
+		}
+		else if(client.getInventory().isFull() && BANK_AREA.contains(myPlayer())) {
+			log("5");
+			return State.BANK;
+		}
+		else if(client.getInventory().isEmpty() && BANK_AREA.contains(myPlayer())) {
+			log("6");
+			return State.WALK_TO_FLAX;
+		}
+		else {
+		if(client.getInventory().isFull())
+		{
+			return State.SPIN;
+		}
+		else
+		{
+			return State.PICK;
+		}
+		}
+	}
+	
+	
+	private void traversePath(Position[] path, boolean reversed) throws InterruptedException {
+		for(int i = 1; i < path.length; i++) {
+			if(!walkTile(path[i])) {
+				i--;
+			}
+		}
+	}
+	
+	private boolean walkTile(Position p) throws InterruptedException {
+		client.moveMouse(new MinimapTileDestination(bot, p), false);
+		sleep(random(150,250));
+		client.pressMouse();
+		
+		int failsafe = 0;
+		
+		while(failsafe < 10 && myPlayer().getPosition().distance(p) > 2) {
+			sleep(400);
+			failsafe++;
+			if(myPlayer().isMoving()) {
+				failsafe = 0;
+			}
+		}
+		if(failsafe == 10) {
+			return false;
+		}
+		return true;
+	}
+	
+	public void onStart() {
+		log("Starting script...");
+	}
+	
+	
+	public void onPaint(Graphics g) {
+		
+	}
+	
+	
+	public int onLoop() throws InterruptedException {
+		switch(getState()) {
+
+		case PICK:
+			if(!myPlayer().isAnimating()) {
+				RS2Object flax = closestObject(FLAX_ID);
+				if(flax != null) {
+					log("found a flax.");
+					if(flax.interact("Pick")) {
+						flax.interact("Pick");
+					}
+				}
+			}
+		break;
+		
+		case WALK_TO_SPIN:
+			traversePath(pathToSpin, false);
+			sleep(random(1500, 2000));
+		break;
+		
+		case CLIMB_LADDER:
+			RS2Object upLadder = closestObject(UP_LADDER_ID);
+			if(upLadder != null) {
+				if(upLadder.interact("Climb-up")) {
+					sleep(random(1000, 1500));
+					ClimbDown = true;
+					ClimbUp = false;
+				}
+			}
+		break;
+		
+		case CLIMB_DOWN_LADDER:
+			RS2Object downLadder = closestObject(DOWN_LADDER_ID);
+			if(downLadder != null) {
+				if(downLadder.interact("Climb-down")) {
+					sleep(random(1000, 1500));
+					ClimbDown = false;
+				}
+			}
+		break;
+		
+		case WALK_TO_BANK:
+			traversePath(pathToBank, false);
+			sleep(random(1500, 2000));
+		break;
+		
+		case WALK_TO_FLAX:
+			traversePath(pathToFlax, false);
+			sleep(random(1500,2000));
+			ClimbUp = true;
+		break;
+			
+		
+		
+		case BANK:
+			RS2Object bank = closestObjectForName("Bank booth");
+			if (bank != null) {
+				if (bank.interact("Bank")) {
+					while (!client.getBank().isOpen()) {
+						sleep(250);
+					}
+					client.getBank().depositAll();
+				}
+				client.getBank().close();
+			}
+		break;
+		
+		
+		case SPIN:
+			RS2Object spinner = closestObject(SPINNER_ID);
+			log("finding spinah");
+			if(spinner != null)
+			{
+				    client.getInventory().interactWithNameThatContains("Flax", "Use", null, false);
+				    spinner.interact("Use");
+				    client.clickMouse(false);
+				    sleep(3500);
+		      }
+		break;
+		
+		
+		
+		}
+	   return 50;
+	}
+	
+	
+	public void onExit() {
+		
+		log("Ending script!");
+	}
+	
+	
+	
+}
